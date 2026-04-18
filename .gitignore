@@ -1,0 +1,15 @@
+*.obj
+*.ps
+*.asp
+*.pic
+*.pal
+*.inc
+*_data.as
+*.sfc
+*.sym
+*.srm
+linkfile
+release/
+data.obj
+hdr.obj
+src/main.obj
