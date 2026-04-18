@@ -606,6 +606,7 @@ static void render_hud(void)
         consoleDrawText(8, 12, "GREEN SCREEN");
         consoleDrawText(8, 14, "EDITION");
         consoleDrawText(8, 17, "PRESS START");
+        consoleDrawText(11, 20, "V 1.0.01");
         hud_dirty = 0;
         return;
     }
