@@ -1,6 +1,8 @@
 #include <snes.h>
 #include <stdlib.h>
 
+#include "res/soundbank.h"
+
 #define FIELD_W 10
 #define FIELD_H 20
 #define MAP_W 32
@@ -32,6 +34,11 @@
 extern char tilfont, palfont;
 extern char board_tiles, board_tiles_end;
 extern char board_palette, board_palette_end;
+extern char jump_brr, jump_brr_end;
+extern char eat_brr, eat_brr_end;
+extern char tada_brr, tada_brr_end;
+extern char crash_brr, crash_brr_end;
+extern char SOUNDBANK__;
 
 typedef struct
 {
@@ -114,6 +121,22 @@ static u16 fall_counter;
 static u8 bag[7];
 static u8 bag_index;
 
+enum
+{
+    SFX_MOVE,
+    SFX_ROTATE,
+    SFX_LOCK,
+    SFX_CLEAR,
+    SFX_TETRIS,
+    SFX_LEVELUP,
+    SFX_START,
+    SFX_GAMEOVER,
+    SFX_PAUSE,
+    SFX_COUNT
+};
+
+static brrsamples sound_table[SFX_COUNT];
+
 static u16 tile_attr(u16 tile)
 {
     return BG_TIL_PAL(0) | BG_TIL_NUM(tile);
@@ -153,6 +176,34 @@ static void setup_sprites(void)
     {
         oamSet(i * 4, 0, 240, 3, 0, 0, 0, 0);
         oamSetEx(i * 4, OBJ_SMALL, OBJ_HIDE);
+    }
+}
+
+static void setup_audio(void)
+{
+    spcBoot();
+    spcSetBank(&SOUNDBANK__);
+    spcAllocateSoundRegion(72);
+    spcLoad(MOD_POLLEN8);
+    spcSetSoundEntry(11, 8, 6, &jump_brr_end - &jump_brr, &jump_brr, &sound_table[SFX_MOVE]);
+    spcSetSoundEntry(10, 8, 7, &eat_brr_end - &eat_brr, &eat_brr, &sound_table[SFX_ROTATE]);
+    spcSetSoundEntry(9, 8, 5, &eat_brr_end - &eat_brr, &eat_brr, &sound_table[SFX_LOCK]);
+    spcSetSoundEntry(12, 8, 5, &tada_brr_end - &tada_brr, &tada_brr, &sound_table[SFX_CLEAR]);
+    spcSetSoundEntry(15, 8, 6, &tada_brr_end - &tada_brr, &tada_brr, &sound_table[SFX_TETRIS]);
+    spcSetSoundEntry(15, 9, 7, &tada_brr_end - &tada_brr, &tada_brr, &sound_table[SFX_LEVELUP]);
+    spcSetSoundEntry(13, 8, 4, &tada_brr_end - &tada_brr, &tada_brr, &sound_table[SFX_START]);
+    spcSetSoundEntry(15, 8, 4, &crash_brr_end - &crash_brr, &crash_brr, &sound_table[SFX_GAMEOVER]);
+    spcSetSoundEntry(9, 8, 4, &jump_brr_end - &jump_brr, &jump_brr, &sound_table[SFX_PAUSE]);
+    spcSetSoundTableEntry(&sound_table[0]);
+    spcPlay(0);
+    spcSetModuleVolume(96);
+}
+
+static void play_sfx(u8 id)
+{
+    if (id < SFX_COUNT)
+    {
+        spcPlaySound(id);
     }
 }
 
@@ -302,6 +353,7 @@ static void spawn_piece(void)
         game_state = STATE_GAMEOVER;
         board_dirty = 1;
         hud_dirty = 1;
+        play_sfx(SFX_GAMEOVER);
     }
 }
 
@@ -327,6 +379,7 @@ static void start_game(void)
     shuffle_bag();
     next_piece = take_piece();
     spawn_piece();
+    play_sfx(SFX_START);
 }
 
 static void lock_piece(void)
@@ -350,6 +403,7 @@ static void clear_lines(void)
     s16 y;
     u8 x;
     u8 cleared = 0;
+    u8 old_level = level;
 
     for (y = FIELD_H - 1; y >= 0; y--)
     {
@@ -399,6 +453,19 @@ static void clear_lines(void)
         }
         board_dirty = 1;
         hud_dirty = 1;
+
+        if (cleared >= 4)
+        {
+            play_sfx(SFX_TETRIS);
+        }
+        else if (level != old_level)
+        {
+            play_sfx(SFX_LEVELUP);
+        }
+        else
+        {
+            play_sfx(SFX_CLEAR);
+        }
     }
 }
 
@@ -430,6 +497,12 @@ static void render_title_panel(void)
 {
     draw_box(3, 5, 26, 17);
     draw_box(6, 8, 20, 11);
+}
+
+static void render_gameover_panel(void)
+{
+    draw_box(6, 8, 20, 11);
+    draw_box(8, 10, 16, 7);
 }
 
 static void render_field(void)
@@ -464,6 +537,11 @@ static void render_field(void)
     }
 
     render_next_piece();
+
+    if (game_state == STATE_GAMEOVER)
+    {
+        render_gameover_panel();
+    }
 }
 
 static void render_active_piece_sprites(void)
@@ -545,6 +623,10 @@ static void render_hud(void)
     else if (game_state == STATE_GAMEOVER)
     {
         consoleDrawText(17, 3, "GAME OVER   ");
+        consoleDrawText(10, 10, "GAME OVER");
+        consoleDrawText(8, 13, "FINAL %05u", score);
+        consoleDrawText(8, 15, "BEST  %05u", best_score);
+        consoleDrawText(8, 17, "PRESS START");
     }
     else
     {
@@ -603,7 +685,10 @@ static void handle_horizontal_input(u16 current, u16 down)
 
     if ((dir == -1 && (down & KEY_LEFT) != 0) || (dir == 1 && (down & KEY_RIGHT) != 0) || horizontal_hold != dir)
     {
-        try_move(dir, 0);
+        if (try_move(dir, 0))
+        {
+            play_sfx(SFX_MOVE);
+        }
         horizontal_hold = dir;
         horizontal_repeat = 5;
         return;
@@ -616,7 +701,10 @@ static void handle_horizontal_input(u16 current, u16 down)
 
     if (horizontal_repeat == 0)
     {
-        try_move(dir, 0);
+        if (try_move(dir, 0))
+        {
+            play_sfx(SFX_MOVE);
+        }
         horizontal_repeat = 1;
     }
 }
@@ -628,6 +716,7 @@ static void try_rotate(s8 dir)
     if (!collision(piece_x, piece_y, piece_type, target))
     {
         rotation = target;
+        play_sfx(SFX_ROTATE);
         return;
     }
 
@@ -635,6 +724,7 @@ static void try_rotate(s8 dir)
     {
         piece_x--;
         rotation = target;
+        play_sfx(SFX_ROTATE);
         return;
     }
 
@@ -642,6 +732,7 @@ static void try_rotate(s8 dir)
     {
         piece_x++;
         rotation = target;
+        play_sfx(SFX_ROTATE);
     }
 }
 
@@ -649,6 +740,7 @@ static void step_fall(void)
 {
     if (!try_move(0, 1))
     {
+        play_sfx(SFX_LOCK);
         lock_piece();
         clear_lines();
         spawn_piece();
@@ -675,6 +767,7 @@ static void fast_drop_step(void)
             continue;
         }
 
+        play_sfx(SFX_LOCK);
         lock_piece();
         clear_lines();
         spawn_piece();
@@ -697,6 +790,7 @@ static void hard_drop(void)
         hud_dirty = 1;
     }
 
+    play_sfx(SFX_LOCK);
     lock_piece();
     clear_lines();
     spawn_piece();
@@ -705,6 +799,7 @@ static void hard_drop(void)
 
 int main(void)
 {
+    setup_audio();
     setup_video();
     setup_sprites();
     load_highscore();
@@ -741,6 +836,10 @@ int main(void)
 
         if (game_state == STATE_TITLE)
         {
+            if (down & KEY_A)
+            {
+                play_sfx(SFX_START);
+            }
             if (down & KEY_START)
             {
                 start_game();
@@ -753,6 +852,7 @@ int main(void)
                 game_state = STATE_PLAY;
                 board_dirty = 1;
                 hud_dirty = 1;
+                play_sfx(SFX_PAUSE);
             }
         }
         else if (game_state == STATE_GAMEOVER)
@@ -769,6 +869,7 @@ int main(void)
                 game_state = STATE_PAUSE;
                 board_dirty = 1;
                 hud_dirty = 1;
+                play_sfx(SFX_PAUSE);
             }
             else
             {
@@ -814,6 +915,7 @@ int main(void)
             render_hud();
         }
         render_active_piece_sprites();
+        spcProcess();
 
         WaitForVBlank();
         if (board_dirty)

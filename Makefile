@@ -2,6 +2,9 @@ ifeq ($(strip $(PVSNESLIB_HOME)),)
 $(error "Please create an environment variable PVSNESLIB_HOME by following this guide: https://github.com/alekmaul/pvsneslib/wiki/Installation")
 endif
 
+AUDIOFILES := res/pollen8.it
+export SOUNDBANK := res/soundbank
+
 include ${PVSNESLIB_HOME}/devkitsnes/snes_rules
 
 .SECONDARY: pvsneslibfont.pic pvsneslibfont.pal boardtiles.pic boardtiles.pal
@@ -9,9 +12,12 @@ include ${PVSNESLIB_HOME}/devkitsnes/snes_rules
 
 export ROMNAME := tetris
 
-all: bitmaps $(ROMNAME).sfc
+SMCONVFLAGS := -s -o $(SOUNDBANK) -V -b 5
+musics: $(SOUNDBANK).obj
 
-clean: cleanBuildRes cleanRom cleanGfx
+all: musics bitmaps $(ROMNAME).sfc
+
+clean: cleanBuildRes cleanRom cleanGfx cleanAudio
 
 pvsneslibfont.pic: pvsneslibfont.png
 	@echo convert font with no tile reduction ... $(notdir $@)
