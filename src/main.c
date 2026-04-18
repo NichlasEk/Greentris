@@ -597,6 +597,9 @@ static void render_hud(void)
     consoleDrawText(2, 15, "                            ");
     consoleDrawText(2, 16, "                            ");
     consoleDrawText(2, 17, "                            ");
+    consoleDrawText(2, 18, "                            ");
+    consoleDrawText(2, 19, "                            ");
+    consoleDrawText(2, 20, "                            ");
     consoleDrawText(2, 27, "BY NICHLAS AND AI            ");
     consoleDrawText(2, 28, "                            ");
 
